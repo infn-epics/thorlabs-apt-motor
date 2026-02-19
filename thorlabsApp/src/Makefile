@@ -24,19 +24,14 @@ thorlabs_DBD += asyn.dbd
 thorlabs_DBD += drvAsynSerialPort.dbd
 thorlabs_DBD += motorSupport.dbd
 
-# APT serial protocol support (Linux)
+# APT support library DBD (from thorlabsSup)
 thorlabs_DBD += devThorLabsApt.dbd
 
 #=============================
-# APT driver source files (Linux-native APT protocol over serial / ser2net)
+# Link the Thorlabs APT support library (built by thorlabsSup)
+thorlabs_LIBS += thorlabsSupport
 
-SRCS += aptSerial.cpp
-SRCS += drvApt.cpp
-SRCS += drvAptDC.cpp
-SRCS += drvAptStepper.cpp
-
-#=============================
-# Add all the support libraries needed by this IOC
+# Other support libraries
 thorlabs_LIBS += motor
 thorlabs_LIBS += asyn
 
