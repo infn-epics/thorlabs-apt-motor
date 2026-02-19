@@ -1,0 +1,6 @@
+file "$(TOP)/db/motor.db"
+{
+pattern
+{P,         M,              DTYP,       PORT,       ADDR,   DESC,                   EGU,    DIR,    VELO,   VBAS,   ACCS,   BDST,   BVEL,   BACC,   MRES,               PREC,   DHLM,   DLLM,   TWV,    INIT}
+{Motor:,    "Step1",        "asynMotor","APT-ST1",  0,      "KST101 Stepper",       mm,     Pos,    2.0,    0.1,    1.0,    0,      2.0,    1.0,    0.0000024414,       4,      150.0,  -0.1,   1.0,    ""}
+}

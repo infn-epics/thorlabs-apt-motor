@@ -1,0 +1,2 @@
+registrar(AptRegister)
+variable(drvAptDebug, int)

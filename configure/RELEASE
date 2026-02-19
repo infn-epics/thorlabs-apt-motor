@@ -1,0 +1,16 @@
+# RELEASE - Location of external support modules
+#
+# Edit the paths below to point to your EPICS installation.
+
+# EPICS Base
+EPICS_BASE = /epics/epics-base/
+
+# Asyn
+ASYN = /epics/support/asyn
+
+# Motor
+MOTOR = /epics/support/motor
+
+# If using a local RELEASE.local file (recommended), create one
+# with the correct paths for your site and uncomment:
+-include $(TOP)/configure/RELEASE.local

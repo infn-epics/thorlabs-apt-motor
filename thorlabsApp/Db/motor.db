@@ -1,0 +1,79 @@
+record(motor, "$(P)$(M)") {
+  field(DESC, "$(DESC)")
+  field(DTYP, "$(DTYP)")
+  field(DIR, "$(DIR)")
+  field(VBAS, "$(VBAS)")
+  field(ACCU, "$(ACCU=1)")
+  field(BDST, "$(BDST)")
+  field(BVEL, "$(BVEL)")
+  field(BACC, "$(BACC)")
+  field(OUT, "@asyn($(PORT),$(ADDR))")
+  field(MRES, "$(MRES)")
+  field(PREC, "$(PREC)")
+  field(EGU, "$(EGU)")
+  field(DHLM, "$(DHLM)")
+  field(DLLM, "$(DLLM)")
+  field(RTRY, "$(RTRY=10)")
+  field(INIT, "$(INIT)")
+  field(RSTM, "$(RSTM=NearZero)")
+  field(TWV, "$(TWV)")
+  field(SDIS, "$(P)$(M)_able.VAL")
+  field(VMAX,"$(VELO)")
+  field(VELO, "$(VELO)")
+  field(ACCS, "$(ACCS)")
+}
+
+record(bo, "$(P)$(M)_able") {
+  field(DESC, "motor enable")
+  field(PINI, "YES")
+  field(OUT, "$(P)$(M).DISP")
+  field(ZNAM, "Enable")
+  field(ONAM, "Disable")
+}
+
+record(calcout, "$(P)$(M)_vCh") {
+  field(DESC, "change velocity")
+  field(CALC, "min(max(a*b,c),d)")
+  field(INPB, "$(P)$(M).S")
+  field(INPC, "$(P)$(M).SBAS")
+  field(INPD, "$(P)$(M).SMAX")
+  field(OUT, "$(P)$(M).S")
+}
+
+record(calcout, "$(P)$(M)_twCh") {
+  field(DESC, "change TWV")
+  field(CALC, "min(max(a*b,c),d-e)")
+  field(INPB, "$(P)$(M).TWV")
+  field(INPC, "$(P)$(M).MRES")
+  field(INPD, "$(P)$(M).HLM")
+  field(INPE, "$(P)$(M).LLM")
+  field(OUT, "$(P)$(M).TWV")
+}
+
+# These records make the motor resolution, offset and direction available to the driver
+
+record(longout,"$(P)$(M)Direction") {
+    field(DESC, "$(M) direction")
+    field(DOL,  "$(P)$(M).DIR CP MS")
+    field(OMSL, "closed_loop")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR))MOTOR_REC_DIRECTION")
+}
+
+record(ao,"$(P)$(M)Offset") {
+    field(DESC, "$(M) offset")
+    field(DOL,  "$(P)$(M).OFF CP MS")
+    field(OMSL, "closed_loop")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),$(ADDR))MOTOR_REC_OFFSET")
+    field(PREC, "$(PREC)")
+}
+
+record(ao,"$(P)$(M)Resolution") {
+    field(DESC, "$(M) resolution")
+    field(DOL,  "$(P)$(M).MRES CP MS")
+    field(OMSL, "closed_loop")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),$(ADDR))MOTOR_REC_RESOLUTION")
+    field(PREC, "$(PREC)")
+}

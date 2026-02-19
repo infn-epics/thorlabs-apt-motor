@@ -1,0 +1,8 @@
+file "$(TOP)/db/motor.db"
+{
+pattern
+{P,         M,              DTYP,       PORT,           ADDR,   DESC,                   EGU,    DIR,    VELO,   VBAS,   ACCS,   BDST,   BVEL,   BACC,   MRES,               PREC,   DHLM,   DLLM,   TWV,    INIT}
+{Motor:,    "BBD103-1",     "asynMotor","APT-BBD103",   0,      "BBD103 Ch 1",          mm,     Pos,    2.3,    0.1,    1.5,    0,      2.3,    1.0,    0.000028939405515,  4,      25.0,   -0.1,   1.0,    ""}
+{Motor:,    "BBD103-2",     "asynMotor","APT-BBD103",   1,      "BBD103 Ch 2",          mm,     Pos,    2.3,    0.1,    1.5,    0,      2.3,    1.0,    0.000028939405515,  4,      25.0,   -0.1,   1.0,    ""}
+{Motor:,    "BBD103-3",     "asynMotor","APT-BBD103",   2,      "BBD103 Ch 3",          mm,     Pos,    2.3,    0.1,    1.5,    0,      2.3,    1.0,    0.000028939405515,  4,      25.0,   -0.1,   1.0,    ""}
+}
