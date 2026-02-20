@@ -1,0 +1,39 @@
+file "$(TOP)/db/motor.db"
+{
+pattern
+{P,         M,              DTYP,       PORT,       ADDR,   DESC,                   EGU,    DIR,    VELO,   VBAS,   ACCS,   BDST,   BVEL,   BACC,   MRES,                   PREC,   DHLM,       DLLM,   TWV,    INIT}
+{Motor:,    "PZ1",          "asynMotor","APT-PZ",   0,      "KIM101 Ch 1",          count,  Pos,    500,    10,     200,    0,      500,    200,    1,                      0,      0,          0,      100,    ""}
+{Motor:,    "PZ2",          "asynMotor","APT-PZ",   1,      "KIM101 Ch 2",          count,  Pos,    500,    10,     200,    0,      500,    200,    1,                      0,      0,          0,      100,    ""}
+{Motor:,    "PZ3",          "asynMotor","APT-PZ",   2,      "KIM101 Ch 3",          count,  Pos,    500,    10,     200,    0,      500,    200,    1,                      0,      0,          0,      100,    ""}
+{Motor:,    "PZ4",          "asynMotor","APT-PZ",   3,      "KIM101 Ch 4",          count,  Pos,    500,    10,     200,    0,      500,    200,    1,                      0,      0,          0,      100,    ""}
+}
+
+# Notes on KIM101 Piezo Inertial Motor:
+#
+# The KIM101 drives stick-slip (inertial) piezo actuators (PIA, PIAK series).
+# Position is reported in encoder counts via MGMSG_MOT_GET_USTATUSUPDATE.
+#
+# MRES (Motor Resolution):
+#   The encoder count-to-physical-distance relationship depends on the
+#   specific actuator connected.  The default MRES=1 keeps readout in
+#   raw encoder counts.
+#
+#   To convert to physical units (e.g. nm), determine the encoder scale
+#   factor for your actuator model and set:
+#
+#     MRES = physical_distance_per_count
+#     EGU  = physical unit (nm, um, mm, etc.)
+#     DHLM = max travel in EGU
+#     DLLM = min travel in EGU
+#
+#   Example for PIA13 (4 mm travel, ~1 nm/count):
+#     EGU=nm, MRES=1, DHLM=4000000, DLLM=0
+#
+# VELO, VBAS, ACCS:
+#   The driver does NOT overwrite the controller's stored velocity parameters.
+#   Use Kinesis or AptSetVelParams() to configure drive rate/amplitude/steps.
+#   The values here keep the motor record happy but are not sent to hardware.
+#
+# DHLM / DLLM:
+#   Both set to 0 (disabled) by default since the position range depends
+#   on the actuator.  Set them once you know your actuator's travel range.

@@ -130,44 +130,70 @@ AptController::AptController(const char* asyn_port, const char* devicePath,
     }
 
     /*
-     * Set destination byte based on channel count.
+     * Set destination byte based on channel count and controller type.
      * Per the APT protocol specification:
      *   - Single-channel USB units (TDC001, KDC101, KST101): dest = 0x50
      *   - Multi-channel bay/rack systems (BSC102, BSC103, BBD10x):
      *     dest = 0x11 (motherboard) and ChanIdent selects the channel
+     *   - Multi-channel USB K-Cubes (KIM101): dest = 0x50
+     *     and ChanIdent in data messages selects the channel
+     *
+     * We distinguish rack from USB by probing RACK_REQ_BAYUSED.
+     * Rack/bay systems respond; USB K-Cubes do not.
      */
     if (actualAxes > 1) {
-        dest_ = APT_RACK;
-        printf("AptController: multi-channel mode — dest=0x%02X (rack)\n",
-               dest_);
-
         /*
-         * For bay-type systems, enumerate which bays are populated.
-         * This is informational; we create axes based on actualAxes.
+         * Probe: is this a rack/bay system or a multi-channel USB unit?
+         * Send RACK_REQ_BAYUSED for bay 0 to APT_RACK (0x11).
+         * Rack controllers (BSC10x, BBD10x) respond with RACK_GET_BAYUSED.
+         * K-Cube multi-channel units (KIM101) ignore it (timeout).
          */
-        for (int bay = 0; bay < actualAxes; bay++) {
-            aptSendShortMessage(aptSerial_, MGMSG_RACK_REQ_BAYUSED,
-                                (uint8_t)bay, 0x00, APT_RACK, APT_HOST);
-            uint8_t bayHdr[6];
-            uint8_t bayData[64];
-            uint16_t bayLen = 0;
-            ret = aptReceiveMessage(aptSerial_, bayHdr, bayData,
-                                    sizeof(bayData), &bayLen, 1000);
-            if (ret == 0 && aptGetMsgId(bayHdr) == MGMSG_RACK_GET_BAYUSED) {
-                /*
-                 * RACK_GET_BAYUSED: byte 2 = bay number, byte 3 = state
-                 *   state: 0x01 = bay occupied, 0x02 = bay empty
-                 */
-                uint8_t bayState = bayHdr[3];
-                printf("AptController: Bay %d %s\n", bay,
-                       (bayState == 0x01) ? "OCCUPIED" :
-                       (bayState == 0x02) ? "EMPTY" : "UNKNOWN");
-            } else {
-                /* Controller may not support RACK_REQ_BAYUSED (e.g. older FW) */
-                APT_INFO("AptController: Bay %d enumeration not supported "
-                         "(ret=%d)\n", bay, ret);
-                break;  /* No point trying remaining bays */
+        bool isRack = false;
+        uint8_t bayHdr[6];
+        uint8_t bayData[64];
+        uint16_t bayLen = 0;
+
+        aptSendShortMessage(aptSerial_, MGMSG_RACK_REQ_BAYUSED,
+                            0x00, 0x00, APT_RACK, APT_HOST);
+        ret = aptReceiveMessage(aptSerial_, bayHdr, bayData,
+                                sizeof(bayData), &bayLen, 1000);
+        if (ret == 0 && aptGetMsgId(bayHdr) == MGMSG_RACK_GET_BAYUSED) {
+            isRack = true;
+        }
+
+        if (isRack) {
+            dest_ = APT_RACK;
+            printf("AptController: multi-channel RACK mode — "
+                   "dest=0x%02X\n", dest_);
+
+            /* Report bay 0 (already probed) */
+            uint8_t bayState = bayHdr[3];
+            printf("AptController: Bay 0 %s\n",
+                   (bayState == 0x01) ? "OCCUPIED" :
+                   (bayState == 0x02) ? "EMPTY" : "UNKNOWN");
+
+            /* Enumerate remaining bays */
+            for (int bay = 1; bay < actualAxes; bay++) {
+                aptSendShortMessage(aptSerial_, MGMSG_RACK_REQ_BAYUSED,
+                                    (uint8_t)bay, 0x00, APT_RACK, APT_HOST);
+                bayLen = 0;
+                ret = aptReceiveMessage(aptSerial_, bayHdr, bayData,
+                                        sizeof(bayData), &bayLen, 1000);
+                if (ret == 0 &&
+                    aptGetMsgId(bayHdr) == MGMSG_RACK_GET_BAYUSED) {
+                    bayState = bayHdr[3];
+                    printf("AptController: Bay %d %s\n", bay,
+                           (bayState == 0x01) ? "OCCUPIED" :
+                           (bayState == 0x02) ? "EMPTY" : "UNKNOWN");
+                } else {
+                    break;
+                }
             }
+        } else {
+            dest_ = APT_GENERIC_USB;
+            printf("AptController: multi-channel USB mode — "
+                   "dest=0x%02X, %d channels via ChanIdent\n",
+                   dest_, actualAxes);
         }
     } else {
         dest_ = APT_GENERIC_USB;
@@ -187,6 +213,10 @@ AptController::AptController(const char* asyn_port, const char* devicePath,
             new AptDCMotorAxis(this, i, chanId);
         } else if (type == APT_STEP_MOTOR) {
             new AptStepMotorAxis(this, i, chanId);
+        } else if (type == APT_PIEZO_MOTOR) {
+            new AptPiezoAxis(this, i, chanId);
+        } else if (type == APT_PZMOT_MOTOR) {
+            new AptPzMotAxis(this, i, chanId);
         }
     }
 
@@ -306,11 +336,22 @@ int AptAxis::requestStatus(uint16_t reqMsgId, uint16_t getMsgId,
             msgId == MGMSG_MOT_GET_STATUSUPDATE ||
             msgId == MGMSG_MOT_MOVE_COMPLETED ||
             msgId == MGMSG_MOT_MOVE_STOPPED ||
-            msgId == MGMSG_MOT_MOVE_HOMED) {
+            msgId == MGMSG_MOT_MOVE_HOMED ||
+            msgId == MGMSG_PZ_GET_PZSTATUSUPDATE ||
+            msgId == MGMSG_PZMOT_GET_STATUSUPDATE ||
+            msgId == MGMSG_PZMOT_MOVE_COMPLETED) {
             /* These are valid spontaneous messages; continue waiting */
             APT_TRACE("requestStatus: skipping spontaneous msg 0x%04X\n", msgId);
             attempts++;
             continue;
+        }
+
+        /* Controller error response — command not supported or failed */
+        if (msgId == MGMSG_HW_RESPONSE || msgId == MGMSG_HW_RICHRESPONSE) {
+            APT_TRACE("requestStatus: HW error response 0x%04X for "
+                      "request 0x%04X — not supported\n", msgId, reqMsgId);
+            pC_->aptLock_.unlock();
+            return -3;
         }
 
         /* Unknown message; log and continue */
@@ -633,9 +674,16 @@ extern "C" void AptControllerConfig(const char* asyn_port,
     } else if (motor_type == "stepper" || motor_type == "Stepper" ||
                motor_type == "step" || motor_type == "Step") {
         motorType = APT_STEP_MOTOR;
+    } else if (motor_type == "piezo" || motor_type == "Piezo" ||
+               motor_type == "pz" || motor_type == "PZ") {
+        motorType = APT_PIEZO_MOTOR;
+    } else if (motor_type == "kim" || motor_type == "KIM" ||
+               motor_type == "pzmot" || motor_type == "PZMOT" ||
+               motor_type == "tim" || motor_type == "TIM") {
+        motorType = APT_PZMOT_MOTOR;
     } else {
         printf("AptControllerConfig: Unknown motor type: %s\n", type);
-        printf("  Valid types: dc, DC, stepper, step\n");
+        printf("  Valid types: dc, stepper, piezo, kim, pzmot, tim\n");
         return;
     }
 

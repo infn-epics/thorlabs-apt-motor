@@ -27,7 +27,8 @@
 
 AptStepMotorAxis::AptStepMotorAxis(AptController* control, int axisNo,
                                     uint8_t channel)
-    : AptAxis(control, axisNo, channel)
+    : AptAxis(control, axisNo, channel),
+      pollMethod_(0)
 {
     printf("AptStepMotorAxis: Initializing stepper motor axis %d, channel %d "
            "(dest=0x%02X)\n", axisNo, channel, control->getDest());
@@ -42,36 +43,53 @@ AptStepMotorAxis::~AptStepMotorAxis()
 }
 
 /**
- * Optimized poll — one request gives both position + status.
- * Try USTATUSUPDATE first, fall back to STATUSUPDATE for legacy.
+ * Optimized poll with auto-detecting status method.
+ *
+ * Three strategies, tried in order of preference:
+ *   Method 1: USTATUSUPDATE — pos+vel+cur+status in one frame
+ *   Method 2: STATUSUPDATE  — pos+enc+status in one frame
+ *   Method 3: POSCOUNTER + STATUSBITS — two separate requests (universal)
+ *
+ * pollMethod_ caches the last working method so subsequent polls skip
+ * unsupported methods immediately instead of waiting 2-second timeouts.
+ * On the first poll (pollMethod_=0) all methods are tried in order;
+ * once one succeeds it is remembered for all future polls.
  */
 asynStatus AptStepMotorAxis::poll(bool* moving)
 {
     uint8_t data[256];
     uint16_t dataLen = 0;
-    int32_t pos;
-    uint32_t statusBits;
+    int32_t pos = lastPosition_;
+    uint32_t statusBits = lastStatus_;
     bool gotStatus = false;
+    int ret;
 
-    /* Try USTATUSUPDATE (newer controllers) */
-    int ret = requestStatus(MGMSG_MOT_REQ_USTATUSUPDATE,
+    /* --- Method 1: USTATUSUPDATE --- */
+    if (pollMethod_ == 0 || pollMethod_ == 1) {
+        ret = requestStatus(MGMSG_MOT_REQ_USTATUSUPDATE,
                             MGMSG_MOT_GET_USTATUSUPDATE,
                             data, sizeof(data), &dataLen);
-    if (ret == 0 && dataLen >= sizeof(AptUStatusUpdate)) {
-        AptUStatusUpdate* update = (AptUStatusUpdate*)data;
-        pos = update->position;
-        statusBits = update->statusBits;
-        lastPosition_ = pos;
-        lastStatus_ = statusBits;
-        pollOk_ = true;
-        gotStatus = true;
-        APT_INFO("Step poll (U): pos=%d vel=%u cur=%u status=0x%08X\n",
-                 update->position, update->velocity,
-                 update->motorCurrent, update->statusBits);
+        if (ret == 0 && dataLen >= sizeof(AptUStatusUpdate)) {
+            AptUStatusUpdate* update = (AptUStatusUpdate*)data;
+            pos = update->position;
+            statusBits = update->statusBits;
+            gotStatus = true;
+            if (pollMethod_ != 1) {
+                pollMethod_ = 1;
+                printf("AptStepMotorAxis: poll method -> USTATUSUPDATE\n");
+            }
+            APT_INFO("Step poll (U): pos=%d vel=%u cur=%u status=0x%08X\n",
+                     update->position, update->velocity,
+                     update->motorCurrent, update->statusBits);
+        } else if (pollMethod_ == 1) {
+            /* Cached method failed — re-detect next poll */
+            pollMethod_ = 0;
+        }
     }
 
-    /* Fall back to STATUSUPDATE (legacy) */
-    if (!gotStatus) {
+    /* --- Method 2: STATUSUPDATE --- */
+    if (!gotStatus && (pollMethod_ == 0 || pollMethod_ == 2)) {
+        dataLen = 0;
         ret = requestStatus(MGMSG_MOT_REQ_STATUSUPDATE,
                             MGMSG_MOT_GET_STATUSUPDATE,
                             data, sizeof(data), &dataLen);
@@ -79,19 +97,58 @@ asynStatus AptStepMotorAxis::poll(bool* moving)
             AptStatusUpdate* update = (AptStatusUpdate*)data;
             pos = update->position;
             statusBits = update->statusBits;
-            lastPosition_ = pos;
-            lastStatus_ = statusBits;
-            pollOk_ = true;
             gotStatus = true;
+            if (pollMethod_ != 2) {
+                pollMethod_ = 2;
+                printf("AptStepMotorAxis: poll method -> STATUSUPDATE\n");
+            }
             APT_INFO("Step poll (S): pos=%d enc=%d status=0x%08X\n",
-                     update->position, update->encoderCount, update->statusBits);
+                     update->position, update->encoderCount,
+                     update->statusBits);
+        } else if (pollMethod_ == 2) {
+            pollMethod_ = 0;
         }
     }
 
+    /* --- Method 3: POSCOUNTER + STATUSBITS (universal fallback) --- */
     if (!gotStatus) {
-        pos = lastPosition_;
-        statusBits = lastStatus_;
-        APT_ERR("Step poll: both USTATUSUPDATE and STATUSUPDATE FAILED, "
+        dataLen = 0;
+        ret = requestStatus(MGMSG_MOT_REQ_POSCOUNTER,
+                            MGMSG_MOT_GET_POSCOUNTER,
+                            data, sizeof(data), &dataLen);
+        if (ret == 0 && dataLen >= sizeof(AptPosCounter)) {
+            AptPosCounter* pc = (AptPosCounter*)data;
+            pos = pc->position;
+            gotStatus = true;
+
+            /* Get status bits in a separate request */
+            dataLen = 0;
+            ret = requestStatus(MGMSG_MOT_REQ_STATUSBITS,
+                                MGMSG_MOT_GET_STATUSBITS,
+                                data, sizeof(data), &dataLen);
+            if (ret == 0 && dataLen >= sizeof(AptStatusBits)) {
+                AptStatusBits* sb = (AptStatusBits*)data;
+                statusBits = sb->statusBits;
+            } else {
+                statusBits = lastStatus_;
+            }
+
+            if (pollMethod_ != 3) {
+                pollMethod_ = 3;
+                printf("AptStepMotorAxis: poll method -> "
+                       "POSCOUNTER+STATUSBITS\n");
+            }
+            APT_INFO("Step poll (B): pos=%d status=0x%08X\n",
+                     pos, statusBits);
+        }
+    }
+
+    if (gotStatus) {
+        lastPosition_ = pos;
+        lastStatus_ = statusBits;
+        pollOk_ = true;
+    } else {
+        APT_ERR("Step poll: ALL methods FAILED, "
                 "using cached pos=%d status=0x%08X\n", pos, statusBits);
     }
 

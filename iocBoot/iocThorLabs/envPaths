@@ -1,0 +1,5 @@
+epicsEnvSet("IOC","iocThorLabs")
+epicsEnvSet("TOP","/app/IOC-DEVEL/thorlabs-apt-motor")
+epicsEnvSet("EPICS_BASE","/epics/epics-base/")
+epicsEnvSet("ASYN","/epics/support/asyn")
+epicsEnvSet("MOTOR","/epics/support/motor")

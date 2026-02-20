@@ -53,6 +53,8 @@ enum AptMotorType
 {
     APT_DC_MOTOR,
     APT_STEP_MOTOR,
+    APT_PIEZO_MOTOR,
+    APT_PZMOT_MOTOR,   /* KIM101, TIM101 — Piezo Inertial Motor (PZMOT_*) */
 };
 
 class epicsShareClass AptController;
@@ -117,8 +119,11 @@ public:
 };
 
 /**
- * Stepper motor axis (TST001, KST101, BSC10x, BSC20x, etc.).
- * Uses MGMSG_MOT_GET_STATUSUPDATE or MGMSG_MOT_GET_USTATUSUPDATE for status.
+ * Stepper motor axis (TST001, KST101, BSC10x, BSC20x, KIM101, etc.).
+ * Auto-detects which status message the controller supports:
+ *   1. USTATUSUPDATE  (pos+vel+cur+status)   — DC-style controllers
+ *   2. STATUSUPDATE   (pos+enc+status)        — legacy stepper
+ *   3. POSCOUNTER + STATUSBITS (two requests) — universal (KIM101, etc.)
  */
 class epicsShareClass AptStepMotorAxis : public AptAxis
 {
@@ -126,17 +131,98 @@ public:
     AptStepMotorAxis(AptController* controller, int axisNo, uint8_t channel);
     ~AptStepMotorAxis();
 
-    /* Override poll to use single USTATUSUPDATE for pos+status */
     asynStatus poll(bool* moving);
 
     int  getPosition();
     uint32_t getStatus();
+
+private:
+    /**
+     * Poll method cache — avoids repeated 2-second timeouts on
+     * unsupported message types.
+     *   0 = auto-detect (try all methods in order)
+     *   1 = USTATUSUPDATE  (0x0490/0x0491)
+     *   2 = STATUSUPDATE   (0x0480/0x0481)
+     *   3 = POSCOUNTER + STATUSBITS (0x0411 + 0x0429)
+     */
+    int pollMethod_;
+};
+
+/**
+ * Piezo axis (KPZ101, TPZ001, etc.).
+ * Uses MGMSG_PZ_* messages for open-loop voltage or closed-loop position.
+ * Position range: 0–32767 (maps to 0–100% of max travel).
+ */
+class epicsShareClass AptPiezoAxis : public AptAxis
+{
+public:
+    AptPiezoAxis(AptController* controller, int axisNo, uint8_t channel);
+    ~AptPiezoAxis();
+
+    /* asynMotorAxis interface overrides */
+    asynStatus move(double position, int relative, double min_velocity,
+                    double max_velocity, double acceleration);
+    asynStatus poll(bool* moving);
+    asynStatus stop(double acceleration);
+    asynStatus home(double min_velocity, double max_velocity,
+                    double acceleration, int forwards);
+
+    /* Piezo-specific operations */
+    void setPositionControlMode(uint8_t mode);
+    void setOutputPosition(uint16_t pos);
+    uint16_t getOutputPosition();
+    void setOutputVoltage(int16_t volts);
+
+private:
+    uint16_t lastPzPosition_;  /* 0-32767 */
+    uint32_t lastPzStatus_;
+    uint8_t  controlMode_;     /* current control mode */
+};
+
+/**
+ * Piezo Inertial Motor axis (KIM101, TIM101, KIM001).
+ *
+ * Uses MGMSG_PZMOT_* messages (0x08xx range) — a completely separate
+ * protocol family from both MOT_* (stepper/DC) and PZ_* (direct piezo).
+ *
+ * Key differences from other motor types:
+ *   - Channel ident uses bitmask encoding (1,2,4,8) in data messages
+ *   - Status update returns ALL 4 channels in one 56-byte response
+ *   - Requires ACK_STATUSUPDATE keepalive every 10 status updates
+ *   - Position is in actuator steps (not encoder counts or %)
+ *   - Stop uses standard MOT_MOVE_STOP (0x0465)
+ *   - Home uses standard MOT_MOVE_HOME (0x0443)
+ */
+class epicsShareClass AptPzMotAxis : public AptAxis
+{
+public:
+    AptPzMotAxis(AptController* controller, int axisNo, uint8_t channel);
+    ~AptPzMotAxis();
+
+    /* asynMotorAxis interface overrides */
+    asynStatus move(double position, int relative, double min_velocity,
+                    double max_velocity, double acceleration);
+    asynStatus poll(bool* moving);
+    asynStatus stop(double acceleration);
+    asynStatus home(double min_velocity, double max_velocity,
+                    double acceleration, int forwards);
+
+    /* PZMOT-specific operations */
+    void pzMotEnableChannel();
+    void pzMotMoveAbsolute(int32_t position);
+    void pzMotMoveJog(int direction);
+    int  pzMotRequestStatus(AptPzMotStatusUpdate* status);
+
+private:
+    uint16_t chanBitmask_;    /* channel bitmask (1, 2, 4, 8) */
+    uint16_t chanEnableMode_; /* PZMOT channel enable value (1-4) */
+    int      ackCounter_;     /* counter for ACK keepalive */
 };
 
 /**
  * EPICS motor controller for Thorlabs APT devices.
  *
- * Supports single-channel USB controllers (TDC001, KDC101, KST101, ...)
+ * Supports single-channel USB controllers (TDC001, KDC101, KST101, KPZ101, ...)
  * and multi-channel bay/rack controllers (BSC102, BSC103, BBD10x, ...).
  *
  * For single-channel (numAxes=1): dest = APT_GENERIC_USB (0x50)
@@ -179,6 +265,8 @@ public:
     friend class AptAxis;
     friend class AptDCMotorAxis;
     friend class AptStepMotorAxis;
+    friend class AptPiezoAxis;
+    friend class AptPzMotAxis;
 
 private:
     AptSerial* aptSerial_;

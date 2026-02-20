@@ -22,13 +22,17 @@ dbLoadRecords("$(MOTOR)/db/motorUtil.db", "P=Motor:")
 ##   Local USB:  AptDC.cmd          (device at /dev/ttyUSBx)
 ##   ser2net:    AptDC_ser2net.cmd  (device at host:port)
 #< AptDC.cmd
-< AptDC_ser2net.cmd
+#< AptDC_ser2net.cmd
 
 ## Stepper motor (KST101, TST001, BSC10x, etc.)
 ##   Local USB:  AptStepper.cmd          (device at /dev/ttyUSBx)
 ##   ser2net:    AptStepper_ser2net.cmd  (device at host:port)
 #< AptStepper.cmd
 #< AptStepper_ser2net.cmd
+
+## Piezo inertial motor (KIM101) or direct-drive piezo (KPZ101, TPZ001, etc.)
+##   ser2net:    AptKPZ101_ser2net.cmd  (KIM101 4-ch at host:port)
+< AptKPZ101_ser2net.cmd
 
 ## ============================================================================
 
@@ -38,6 +42,6 @@ iocInit
 motorUtilInit("Motor:")
 
 # Boot complete
-# var drvAptDebug 2
+var drvAptDebug 2
 # dbpf Motor:DC1.VAL 4
 # dbpf Motor:DC1.VAL 2

@@ -18,6 +18,8 @@ thorlabsSupport_SRCS += aptSerial.cpp
 thorlabsSupport_SRCS += drvApt.cpp
 thorlabsSupport_SRCS += drvAptDC.cpp
 thorlabsSupport_SRCS += drvAptStepper.cpp
+thorlabsSupport_SRCS += drvAptPiezo.cpp
+thorlabsSupport_SRCS += drvAptPzMot.cpp
 
 #=============================
 # Libraries needed by the support library

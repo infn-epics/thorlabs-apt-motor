@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<display version="2.0.0">
+  <name>Thorlabs Piezo - $(P)$(M)</name>
+  <width>440</width>
+  <height>480</height>
+  <widget type="label" version="2.0.0">
+    <name>Title</name>
+    <text>Thorlabs Piezo - $(P)$(M)</text>
+    <x>10</x>
+    <y>5</y>
+    <width>420</width>
+    <height>30</height>
+    <font>
+      <font name="Header 1" family="Liberation Sans" style="BOLD" size="22.0">
+      </font>
+    </font>
+    <horizontal_alignment>1</horizontal_alignment>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>DescLabel</name>
+    <text>Description:</text>
+    <x>10</x>
+    <y>42</y>
+    <font>
+      <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+      </font>
+    </font>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>DescValue</name>
+    <pv_name>$(P)$(M).DESC</pv_name>
+    <x>115</x>
+    <y>42</y>
+    <width>250</width>
+  </widget>
+  <widget type="group" version="3.0.0">
+    <name>PositionGroup</name>
+    <x>10</x>
+    <y>70</y>
+    <width>420</width>
+    <height>125</height>
+    <style>1</style>
+    <widget type="label" version="2.0.0">
+      <name>RBVLabel</name>
+      <text>Readback:</text>
+      <x>10</x>
+      <y>5</y>
+      <width>90</width>
+      <height>25</height>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>RBVValue</name>
+      <pv_name>$(P)$(M).RBV</pv_name>
+      <x>105</x>
+      <y>5</y>
+      <width>150</width>
+      <height>25</height>
+      <font>
+        <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+        </font>
+      </font>
+      <precision>4</precision>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>EGU_RBV</name>
+      <pv_name>$(P)$(M).EGU</pv_name>
+      <x>260</x>
+      <y>5</y>
+      <width>40</width>
+      <height>25</height>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>SetpointLabel</name>
+      <text>Move To:</text>
+      <x>10</x>
+      <y>35</y>
+      <width>90</width>
+      <height>25</height>
+    </widget>
+    <widget type="textentry" version="3.0.0">
+      <name>SetpointEntry</name>
+      <pv_name>$(P)$(M).VAL</pv_name>
+      <x>105</x>
+      <y>35</y>
+      <width>150</width>
+      <height>25</height>
+      <precision>4</precision>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>EGU_VAL</name>
+      <pv_name>$(P)$(M).EGU</pv_name>
+      <x>260</x>
+      <y>35</y>
+      <width>40</width>
+      <height>25</height>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>DialLabel</name>
+      <text>Dial:</text>
+      <x>10</x>
+      <y>65</y>
+      <width>90</width>
+      <height>25</height>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>DialValue</name>
+      <pv_name>$(P)$(M).DRBV</pv_name>
+      <x>105</x>
+      <y>65</y>
+      <width>150</width>
+      <height>25</height>
+      <precision>4</precision>
+    </widget>
+    <widget type="progressbar" version="2.0.0">
+      <name>TravelBar</name>
+      <pv_name>$(P)$(M).RBV</pv_name>
+      <x>10</x>
+      <y>95</y>
+      <width>395</width>
+    </widget>
+  </widget>
+  <widget type="group" version="3.0.0">
+    <name>TweakGroup</name>
+    <x>10</x>
+    <y>205</y>
+    <width>420</width>
+    <height>40</height>
+    <style>1</style>
+    <widget type="action_button" version="3.0.0">
+      <name>TweakRev</name>
+      <actions>
+        <action type="write_pv">
+          <description>Tweak Reverse</description>
+          <pv_name>$(P)$(M).TWR</pv_name>
+          <value>1</value>
+        </action>
+      </actions>
+      <text>&lt;&lt;</text>
+      <x>10</x>
+      <y>5</y>
+      <width>60</width>
+      <height>25</height>
+      <tooltip>Tweak reverse by step size</tooltip>
+    </widget>
+    <widget type="textentry" version="3.0.0">
+      <name>TweakVal</name>
+      <pv_name>$(P)$(M).TWV</pv_name>
+      <x>80</x>
+      <y>5</y>
+      <width>120</width>
+      <height>25</height>
+      <precision>4</precision>
+    </widget>
+    <widget type="action_button" version="3.0.0">
+      <name>TweakFwd</name>
+      <actions>
+        <action type="write_pv">
+          <description>Tweak Forward</description>
+          <pv_name>$(P)$(M).TWF</pv_name>
+          <value>1</value>
+        </action>
+      </actions>
+      <text>&gt;&gt;</text>
+      <x>210</x>
+      <y>5</y>
+      <width>60</width>
+      <height>25</height>
+      <tooltip>Tweak forward by step size</tooltip>
+    </widget>
+  </widget>
+  <widget type="group" version="3.0.0">
+    <name>ControlGroup</name>
+    <x>10</x>
+    <y>255</y>
+    <width>420</width>
+    <height>40</height>
+    <style>1</style>
+    <widget type="action_button" version="3.0.0">
+      <name>StopBtn</name>
+      <actions>
+        <action type="write_pv">
+          <description>Stop</description>
+          <pv_name>$(P)$(M).STOP</pv_name>
+          <value>1</value>
+        </action>
+      </actions>
+      <text>STOP</text>
+      <x>10</x>
+      <y>5</y>
+      <width>80</width>
+      <height>25</height>
+      <foreground_color>
+        <color red="255" green="255" blue="255">
+        </color>
+      </foreground_color>
+      <background_color>
+        <color red="200" green="0" blue="0">
+        </color>
+      </background_color>
+      <tooltip>Stop motion</tooltip>
+    </widget>
+    <widget type="action_button" version="3.0.0">
+      <name>ZeroBtn</name>
+      <actions>
+        <action type="write_pv">
+          <description>Zero Position (PZ_SET_ZERO)</description>
+          <pv_name>$(P)$(M).HOMF</pv_name>
+          <value>1</value>
+        </action>
+      </actions>
+      <text>ZERO</text>
+      <x>100</x>
+      <y>5</y>
+      <width>80</width>
+      <height>25</height>
+      <tooltip>Zero the piezo position (strain gauge offset)</tooltip>
+    </widget>
+  </widget>
+  <widget type="group" version="3.0.0">
+    <name>StatusGroup</name>
+    <x>10</x>
+    <y>305</y>
+    <width>420</width>
+    <height>70</height>
+    <style>1</style>
+    <widget type="label" version="2.0.0">
+      <name>DoneLabel</name>
+      <text>Done:</text>
+      <x>10</x>
+      <y>5</y>
+      <width>55</width>
+    </widget>
+    <widget type="led" version="2.0.0">
+      <name>DoneLED</name>
+      <pv_name>$(P)$(M).DMOV</pv_name>
+      <x>65</x>
+      <y>5</y>
+      <on_color>
+        <color red="0" green="200" blue="0">
+        </color>
+      </on_color>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>MovingLabel</name>
+      <text>Moving:</text>
+      <x>100</x>
+      <y>5</y>
+      <width>55</width>
+    </widget>
+    <widget type="led" version="2.0.0">
+      <name>MovingLED</name>
+      <pv_name>$(P)$(M).MOVN</pv_name>
+      <x>160</x>
+      <y>5</y>
+      <on_color>
+        <color name="OK" red="0" green="255" blue="0">
+        </color>
+      </on_color>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>ZeroedLabel</name>
+      <text>Zeroed:</text>
+      <x>200</x>
+      <y>5</y>
+      <width>55</width>
+    </widget>
+    <widget type="led" version="2.0.0">
+      <name>ZeroedLED</name>
+      <pv_name>$(P)$(M).ATHM</pv_name>
+      <x>260</x>
+      <y>5</y>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>DHLMLabel</name>
+      <text>Hi Soft:</text>
+      <x>10</x>
+      <y>35</y>
+      <width>55</width>
+    </widget>
+    <widget type="textentry" version="3.0.0">
+      <name>DHLMEntry</name>
+      <pv_name>$(P)$(M).DHLM</pv_name>
+      <x>65</x>
+      <y>35</y>
+      <precision>4</precision>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>DLLMLabel</name>
+      <text>Lo Soft:</text>
+      <x>200</x>
+      <y>35</y>
+      <width>55</width>
+    </widget>
+    <widget type="textentry" version="3.0.0">
+      <name>DLLMEntry</name>
+      <pv_name>$(P)$(M).DLLM</pv_name>
+      <x>260</x>
+      <y>35</y>
+      <precision>4</precision>
+    </widget>
+  </widget>
+  <widget type="group" version="3.0.0">
+    <name>InfoGroup</name>
+    <x>10</x>
+    <y>385</y>
+    <width>420</width>
+    <height>75</height>
+    <style>1</style>
+    <widget type="label" version="2.0.0">
+      <name>MRESLabel</name>
+      <text>MRES:</text>
+      <x>10</x>
+      <y>5</y>
+      <width>50</width>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>MRESValue</name>
+      <pv_name>$(P)$(M).MRES</pv_name>
+      <x>65</x>
+      <y>5</y>
+      <width>140</width>
+      <precision>10</precision>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>DTYPLabel</name>
+      <text>DTYP:</text>
+      <x>220</x>
+      <y>5</y>
+      <width>50</width>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>DTYPValue</name>
+      <pv_name>$(P)$(M).DTYP</pv_name>
+      <x>275</x>
+      <y>5</y>
+      <width>130</width>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>EGULabel</name>
+      <text>EGU:</text>
+      <x>10</x>
+      <y>30</y>
+      <width>50</width>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>EGUValue</name>
+      <pv_name>$(P)$(M).EGU</pv_name>
+      <x>65</x>
+      <y>30</y>
+      <width>60</width>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>PORTLabel</name>
+      <text>PORT:</text>
+      <x>220</x>
+      <y>30</y>
+      <width>50</width>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>PORTValue</name>
+      <pv_name>$(P)$(M).OUT</pv_name>
+      <x>275</x>
+      <y>30</y>
+      <width>130</width>
+    </widget>
+  </widget>
+</display>

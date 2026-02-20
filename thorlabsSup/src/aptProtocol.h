@@ -127,6 +127,96 @@
 /* EEPROM */
 #define MGMSG_MOT_SET_EEPROMPARAMS   0x04B9
 
+/* ---- Piezo (KPZ101, TPZ001, etc.) messages ---- */
+#define MGMSG_PZ_SET_POSCONTROLMODE  0x0640
+#define MGMSG_PZ_REQ_POSCONTROLMODE  0x0641
+#define MGMSG_PZ_GET_POSCONTROLMODE  0x0642
+
+#define MGMSG_PZ_SET_OUTPUTVOLTS     0x0643
+#define MGMSG_PZ_REQ_OUTPUTVOLTS     0x0644
+#define MGMSG_PZ_GET_OUTPUTVOLTS     0x0645
+
+#define MGMSG_PZ_SET_OUTPUTPOS       0x0646
+#define MGMSG_PZ_REQ_OUTPUTPOS       0x0647
+#define MGMSG_PZ_GET_OUTPUTPOS       0x0648
+
+#define MGMSG_PZ_SET_INPUTVOLTSSRC   0x0652
+#define MGMSG_PZ_REQ_INPUTVOLTSSRC   0x0653
+#define MGMSG_PZ_GET_INPUTVOLTSSRC   0x0654
+
+#define MGMSG_PZ_SET_PICONSTS        0x0655
+#define MGMSG_PZ_REQ_PICONSTS        0x0656
+#define MGMSG_PZ_GET_PICONSTS        0x0657
+
+#define MGMSG_PZ_SET_ZERO            0x0658
+
+#define MGMSG_PZ_REQ_PZSTATUSBITS    0x065B
+#define MGMSG_PZ_GET_PZSTATUSBITS    0x065C
+
+#define MGMSG_PZ_REQ_PZSTATUSUPDATE  0x0660
+#define MGMSG_PZ_GET_PZSTATUSUPDATE  0x0661
+
+#define MGMSG_PZ_SET_MAXTRAVEL       0x064F
+#define MGMSG_PZ_REQ_MAXTRAVEL       0x0650
+#define MGMSG_PZ_GET_MAXTRAVEL       0x0651
+
+#define MGMSG_PZ_SET_OUTPUTMAXVOLTS  0x0680
+#define MGMSG_PZ_REQ_OUTPUTMAXVOLTS  0x0681
+#define MGMSG_PZ_GET_OUTPUTMAXVOLTS  0x0682
+
+/* ---- Piezo Inertial Motor (KIM101, TIM101) — PZMOT_* messages ---- */
+#define MGMSG_PZMOT_SET_PARAMS        0x08C0
+#define MGMSG_PZMOT_REQ_PARAMS        0x08C1
+#define MGMSG_PZMOT_GET_PARAMS        0x08C2
+
+#define MGMSG_PZMOT_MOVE_ABSOLUTE     0x08D4   /* 6-byte header + 6 data */
+#define MGMSG_PZMOT_MOVE_COMPLETED    0x08D6   /* 6-byte header + 14 data */
+#define MGMSG_PZMOT_MOVE_JOG          0x08D9   /* 6-byte header-only */
+
+#define MGMSG_PZMOT_REQ_STATUSUPDATE  0x08E0   /* request — header-only */
+#define MGMSG_PZMOT_GET_STATUSUPDATE  0x08E1   /* response — 6 hdr + 56 data */
+#define MGMSG_PZMOT_ACK_STATUSUPDATE  0x08E2   /* keep-alive — header-only */
+
+/* PZMOT sub-message IDs (used inside PZMOT_SET/REQ/GET_PARAMS) */
+#define PZMOT_SUBMSG_CHANENABLEMODE    0x002B  /* channel enable mode */
+#define PZMOT_SUBMSG_CLOSEDLOOP_PARAMS 0x0039  /* closed-loop control params */
+#define PZMOT_SUBMSG_TPOS              0x003D  /* target position */
+#define PZMOT_SUBMSG_CURRENT_POS       0x0040  /* current position / set zero */
+#define PZMOT_SUBMSG_AMD               0x0043  /* auto-mode detection */
+#define PZMOT_SUBMSG_JOGPARAMS         0x0044  /* jog parameters */
+#define PZMOT_SUBMSG_AMPOUTPARAMS      0x0045  /* amplitude output params */
+#define PZMOT_SUBMSG_OPENMOVEPARAMS    0x0046  /* open-loop move params */
+#define PZMOT_SUBMSG_CLOSEMOVEPARAMS   0x0047  /* close-loop move params */
+
+/*
+ * PZMOT KCube channel enable modes (sub-message 0x2B).
+ * Only one channel or one pair of channels can be enabled at a time.
+ * The move command only affects the currently enabled channel.
+ */
+#define PZMOT_CHAN_ENABLE_NONE   0x0000  /* no channel enabled */
+#define PZMOT_CHAN_ENABLE_CH1    0x0001
+#define PZMOT_CHAN_ENABLE_CH2    0x0002
+#define PZMOT_CHAN_ENABLE_CH3    0x0003
+#define PZMOT_CHAN_ENABLE_CH4    0x0004
+#define PZMOT_CHAN_ENABLE_CH1_2  0x0005  /* channels 1 and 2 */
+#define PZMOT_CHAN_ENABLE_CH3_4  0x0006  /* channels 3 and 4 */
+
+/*
+ * PZMOT channel bitmask encoding (for multi-channel data messages).
+ * PZMOT_MOVE_ABSOLUTE and status use bitmask: 1, 2, 4, 8
+ * PZMOT_MOVE_JOG uses sequential: 1, 2, 3, 4
+ */
+#define PZMOT_CHAN_BITMASK(n) (1 << (n))  /* 0-based axis → bitmask */
+
+/* Piezo position control modes */
+#define PZ_POSCONTROL_OPENLOOP        0x01   /* Open loop (voltage) */
+#define PZ_POSCONTROL_CLOSEDLOOP      0x02   /* Closed loop (position feedback) */
+#define PZ_POSCONTROL_OPENLOOP_SMOOTH 0x03   /* Open loop, smooth */
+#define PZ_POSCONTROL_CLOSEDLOOP_SMOOTH 0x04 /* Closed loop, smooth */
+
+/* Piezo position range (0-32767 = 0% to 100% of max travel) */
+#define PZ_MAX_POSITION              32767
+
 /*
  * Source/Destination IDs
  */
@@ -287,6 +377,107 @@ struct AptStatusUpdate {
 struct AptStatusBits {
     uint16_t chanIdent;
     uint32_t statusBits;
+};
+
+/* ---- Piezo data structures ---- */
+
+/* PZ_SET/GET_OUTPUTPOS data (4 bytes) */
+struct AptPzOutputPos {
+    uint16_t chanIdent;
+    uint16_t position;     /* 0–32767 (0–100% of max travel) */
+};
+
+/* PZ_SET/GET_OUTPUTVOLTS data (4 bytes) */
+struct AptPzOutputVolts {
+    uint16_t chanIdent;
+    int16_t  voltage;      /* 0–32767 (0–100% of max output voltage) */
+};
+
+/* PZ_GET_PZSTATUSUPDATE data (16 bytes) */
+struct AptPzStatusUpdate {
+    uint16_t chanIdent;
+    uint16_t outputVoltage;  /* 0–32767 */
+    uint16_t outputPosition; /* 0–32767 (closed-loop only) */
+    uint32_t statusBits;
+};
+
+/* PZ_SET/GET_MAXTRAVEL data (4 bytes) */
+struct AptPzMaxTravel {
+    uint16_t chanIdent;
+    uint16_t maxTravel;    /* in 100nm steps (e.g. 200 = 20 µm) */
+};
+
+/* PZ_SET/GET_OUTPUTMAXVOLTS data (4 bytes) */
+struct AptPzOutputMaxVolts {
+    uint16_t chanIdent;
+    int16_t  maxVolts;     /* in 0.1 V steps (e.g. 750 = 75.0 V) */
+};
+
+/* PZ_SET/GET_PICONSTS data (6 bytes) */
+struct AptPzPIConsts {
+    uint16_t chanIdent;
+    uint16_t propConst;
+    uint16_t intConst;
+};
+
+/* ---- PZMOT (Piezo Inertial Motor) data structures ---- */
+
+/*
+ * PZMOT_MOVE_ABSOLUTE data (6 bytes).
+ * ChanIdent is a bitmask: Chan 1=1, Chan 2=2, Chan 3=4, Chan 4=8
+ */
+struct AptPzMotMoveAbs {
+    uint16_t chanIdent;    /* channel bitmask */
+    int32_t  absPosition;  /* target position in steps */
+};
+
+/*
+ * PZMOT_MOVE_COMPLETED data (14 bytes).
+ * Sent by the controller when an absolute or jog move completes.
+ */
+struct AptPzMotMoveCompleted {
+    uint16_t chanIdent;    /* channel bitmask */
+    int32_t  absPosition;  /* final position in steps */
+    int32_t  encCount;     /* not used */
+    uint32_t statusBits;   /* not used */
+};
+
+/*
+ * PZMOT_GET_STATUSUPDATE per-channel data (14 bytes).
+ * The full status response contains 4 of these back-to-back (56 bytes total).
+ */
+struct AptPzMotChannelStatus {
+    uint16_t chanIdent;    /* channel bitmask: 1, 2, 4, 8 */
+    int32_t  position;     /* position count */
+    int32_t  encCount;     /* not used */
+    uint32_t statusBits;   /* see PZMOT status bits */
+};
+
+/*
+ * PZMOT_GET_STATUSUPDATE full data (56 bytes).
+ * Contains status for all 4 channels at once.
+ */
+struct AptPzMotStatusUpdate {
+    struct AptPzMotChannelStatus channel[4];
+};
+
+/* PZMOT_SET_PARAMS generic wrapper (variable length).
+ * First 2 bytes of data are always subMsgId (word) + chanIdent (word),
+ * followed by sub-message-specific fields.
+ */
+struct AptPzMotParamHeader {
+    uint16_t subMsgId;
+    uint16_t chanIdent;
+};
+
+/* PZMOT sub-message: Set current position / zero (sub-msg 0x40)
+ * Total data = 12 bytes: subMsgId(2) + chanIdent(2) + reserved(4) + position(4)
+ */
+struct AptPzMotSetPos {
+    uint16_t subMsgId;     /* PZMOT_SUBMSG_CURRENT_POS = 0x0040 */
+    uint16_t chanIdent;
+    uint32_t reserved;     /* set to 0 */
+    int32_t  position;     /* new position value (0 to zero) */
 };
 
 #pragma pack(pop)
