@@ -6,10 +6,11 @@ Uses the APT (Advanced Positioning Technology) binary serial protocol
 to communicate with controllers over local USB serial (FTDI) or remotely
 via ser2net (TCP).
 
-Supports both **single-channel** USB units and **multi-channel bay/rack**
-controllers (BSC102/103, BBD10x/20x/30x). The number of axes is either
-specified explicitly or auto-detected from the controller's `HW_GET_INFO`
-response at startup.
+Supports **single-channel** USB units, **multi-channel bay/rack** controllers
+(BSC102/103, BBD10x/20x/30x), **direct-drive piezo** controllers (KPZ101,
+TPZ001), and **multi-channel piezo inertial** motor controllers (KIM101,
+TIM101). The number of axes is either specified explicitly or auto-detected
+from the controller's `HW_GET_INFO` response at startup.
 
 ## Supported Controllers
 
@@ -33,6 +34,26 @@ response at startup.
 ### Multi-Channel Stepper Motor Bay Controllers
 - **BSC102 / BSC202** — Benchtop Stepper Motor Controller (2 bays)
 - **BSC103 / BSC203** — Benchtop Stepper Motor Controller (3 bays)
+
+### Single-Channel Direct-Drive Piezo Controllers
+- **KPZ101** — K-Cube Piezo Controller (open/closed loop, ±75 V)
+- **TPZ001** — T-Cube Piezo Controller
+- **MPZ601** — Multi-Channel Piezo Controller
+
+These use the APT `PZ_*` message family (0x06xx). Position is a 16-bit
+percent-of-travel value (0–32767). Use `motorType="piezo"`.
+
+### Multi-Channel Piezo Inertial Motor Controllers
+- **KIM101** — K-Cube Piezo Inertial Motor Controller (4 channels)
+- **TIM101** — T-Cube Piezo Inertial Motor Controller (4 channels)
+
+These use the APT `PZMOT_*` message family (0x08xx), which is completely
+distinct from both the motor (MOT_*) and direct-drive piezo (PZ_*) families.
+All 4 channels are addressed through a single USB connection. Use
+`motorType="kim"` (aliases: `"pzmot"`, `"tim"`). Position is in encoder
+counts (step increments). **Homing is not supported** by KIM101/TIM101
+hardware (no home switch); the EPICS `home` command zeros the position counter
+at the current physical position instead.
 
 ## Prerequisites
 
@@ -61,6 +82,8 @@ response at startup.
    | `AptDC_ser2net.cmd` | DC servo | remote via ser2net |
    | `AptStepper.cmd` | Stepper | local USB serial |
    | `AptStepper_ser2net.cmd` | Stepper | remote via ser2net |
+   | `AptKPZ101_ser2net.cmd` | KPZ101 direct-drive piezo | remote via ser2net |
+   | `AptKIM101_ser2net.cmd` | KIM101 4-ch piezo inertial | remote via ser2net |
 
 2. Edit the `.substitutions` file to set PV prefix, motor resolution, etc.
 
@@ -90,6 +113,47 @@ AptControllerConfig("APT-BSCX", "/dev/ttyUSB0", "stepper", 0, 0.2, 1.0)
 Example files `AptBSC103.cmd`, `AptBSC103.substitutions`, `AptBBD103.cmd`,
 and `AptBBD103.substitutions` are provided in `iocBoot/iocThorLabs/`.
 
+### KIM101 / TIM101 — 4-channel piezo inertial motor controller
+
+the KIM101 exposes all 4 channels over a single USB connection. Each channel
+maps to one EPICS motor record `ADDR` (0–3):
+
+```
+# KIM101 over ser2net — 4 piezo inertial axes
+dbLoadTemplate("AptKPZ101_ser2net.substitutions")
+AptControllerConfig("APT-PZ", "hostname:4001", "kim", 4, 0.2, 1.0)
+```
+
+Substitutions file example:
+```
+file "$(MOTOR)/db/motor.db"
+{
+pattern { PORT,     ADDR, PREFIX,         DESC,             EGU,   MRES, VMAX }
+        { "APT-PZ",    0, "KIM:CH1:",  "Piezo inertial 1", count,    1,  500 }
+        { "APT-PZ",    1, "KIM:CH2:",  "Piezo inertial 2", count,    1,  500 }
+        { "APT-PZ",    2, "KIM:CH3:",  "Piezo inertial 3", count,    1,  500 }
+        { "APT-PZ",    3, "KIM:CH4:",  "Piezo inertial 4", count,    1,  500 }
+}
+```
+
+**Notes:**
+- `MRES=1` (one count per step) is recommended; apply real-world calibration
+  via the motor record `MRES` or `ERES` field once stage travel is known.
+- The controller requires the target channel to be explicitly enabled before
+  each move; the driver handles this automatically.
+- `home` zeroes the position counter at the current position (no
+  physical movement). It does **not** drive to a switch.
+
+### KPZ101 / TPZ001 — single-channel direct-drive piezo controller
+
+```
+# KPZ101 over ser2net
+dbLoadTemplate("AptKPZ101_ser2net.substitutions")
+AptControllerConfig("APT-PZ", "hostname:4001", "piezo", 1, 0.2, 1.0)
+```
+
+Position units are 0–32767 (0–100 % of piezo travel).
+
 ## IOC Shell Commands
 
 ### `AptControllerConfig`
@@ -102,16 +166,29 @@ AptControllerConfig(portName, devicePath, motorType, numAxes, movingPoll, idlePo
 |---|---|
 | `portName` | EPICS asyn port name (must match `PORT` in substitutions) |
 | `devicePath` | `/dev/ttyUSBx` for local serial, or `host:port` for ser2net |
-| `motorType` | `"dc"` or `"stepper"` |
+| `motorType` | See table below |
 | `numAxes` | `0` = auto-detect, `1` = single-channel (backward compat), `N` = multi-channel |
 | `movingPoll` | Polling period in seconds while moving |
 | `idlePoll` | Polling period in seconds while idle |
 
-**Protocol note:** When `numAxes=1` (or auto-detected as 1), messages are
-sent to `dest=0x50` (Generic USB), which is required for single-channel USB
-units. When `numAxes>1`, `dest=0x11` (Rack/motherboard) is used and the APT
-`ChanIdent` field routes each message to the correct bay, as required by the
-APT specification for bay-type controllers.
+Supported `motorType` values:
+
+| `motorType` | Protocol family | Typical controllers |
+|---|---|---|
+| `"dc"` | `MOT_*` (0x04xx) | KDC001, KDC101, TDC001, BBD10x |
+| `"stepper"` | `MOT_*` (0x04xx) | KST101, TST001, BSC10x |
+| `"piezo"` | `PZ_*` (0x06xx) | KPZ101, TPZ001 |
+| `"kim"` / `"pzmot"` / `"tim"` | `PZMOT_*` (0x08xx) | KIM101, TIM101 |
+
+**Protocol notes:**
+- When `numAxes=1` (or auto-detected as 1), messages are sent to `dest=0x50`
+  (Generic USB), which is required for single-channel USB units.
+- When `numAxes>1` with `motorType="dc"` or `"stepper"`, `dest=0x11`
+  (Rack/motherboard) is used and the APT `ChanIdent` field routes each
+  message to the correct bay.
+- For `motorType="kim"` / `"pzmot"`, `dest=0x50` is always used regardless
+  of `numAxes`; the channel is selected via per-message sub-parameters in
+  the PZMOT protocol.
 
 ### `AptSetVelParams`
 
