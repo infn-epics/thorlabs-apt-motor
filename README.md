@@ -244,10 +244,36 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{serial}=="70xxxxxx", SYMLINK+="
 
 ## Remote Access via ser2net
 
-The driver supports connecting to controllers attached to remote hosts
-via ser2net — a serial-to-network proxy.
+All Thorlabs APT controllers use an FTDI USB-to-serial chip. On any Linux
+host the kernel's built-in `ftdi_sio` driver exposes them automatically as
+`/dev/ttyUSBx` — no proprietary driver or Windows software required.
 
-Example ser2net v4 configuration (on the remote host):
+This means **any cheap, Linux-capable single-board computer** (Raspberry Pi,
+Orange Pi, ROCK, etc.) placed next to the hardware can act as a transparent
+serial gateway using [ser2net](https://github.com/cminyard/ser2net). The IOC
+itself runs elsewhere on the network — typically inside a **Docker container**
+or on a dedicated server — connecting to the gateway over plain TCP.
+
+This architecture cleanly separates the physical I/O layer from the control
+logic and makes the IOC fully portable:
+
+```
+┌──────────────────┐        TCP        ┌─────────────────────────┐
+│  Raspberry Pi    │◄─────────────────►│  Docker host / server   │
+│  (or any SBC)    │   ser2net :4001   │                         │
+│                  │                   │  ┌───────────────────┐  │
+│  /dev/ttyUSB0 ◄──┤  115200 8N1       │  │  EPICS IOC        │  │
+│        │         │  RTS/CTS          │  │  (thorlabs image) │  │
+│  ┌─────┴──────┐  │                   │  └───────────────────┘  │
+│  │ Thorlabs   │  │                   │                         │
+│  │ controller │  │                   │                         │
+│  └────────────┘  │                   │                         │
+└──────────────────┘                   └─────────────────────────┘
+```
+
+### ser2net configuration
+
+Example ser2net v4 YAML configuration (on the Raspberry Pi / SBC):
 ```yaml
 connection: &thorlabs-bsc103
   accepter: tcp,4001
@@ -256,10 +282,40 @@ connection: &thorlabs-bsc103
     kickolduser: true
 ```
 
+Multiple controllers can be exposed on different TCP ports:
+```yaml
+connection: &thorlabs-kim101
+  accepter: tcp,4001
+  connector: serialdev,/dev/ttyUSB0,115200n81,local,rtscts
+  options:
+    kickolduser: true
+
+connection: &thorlabs-kdc101
+  accepter: tcp,4002
+  connector: serialdev,/dev/ttyUSB1,115200n81,local,rtscts
+  options:
+    kickolduser: true
+```
+
 Then in the IOC startup:
 ```
 AptControllerConfig("APT-BSC103", "hostname:4001", "stepper", 3, 0.2, 1.0)
 ```
+
+### Running the IOC in Docker
+
+Because the IOC communicates over TCP (no local USB access needed), it runs
+unmodified inside a container:
+
+```bash
+docker run --rm --network host my-epics-ioc \
+  ./st.cmd
+```
+
+No `--device` flag or USB pass-through is required — the ser2net gateway
+handles the physical interface. This makes it straightforward to manage IOCs
+with standard container orchestration tools (Docker Compose, Kubernetes,
+Podman, etc.).
 
 ## Communication Parameters
 
