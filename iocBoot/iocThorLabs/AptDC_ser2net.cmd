@@ -17,4 +17,6 @@ dbLoadTemplate("AptDC.substitutions")
 #                     options:
 #                       kickolduser: true
 #
-AptControllerConfig("APT-DC1", "pldanteco101.lnf.infn.it:4001", "dc", 1, 0.2, 1.0)
+#AptControllerConfig("APT-DC1", "pldanteco101.lnf.infn.it:4001", "dc", 1, 0.2, 1.0)
+#AptControllerConfig("APT-DC1", "plsparcrasb010.lnf.infn.it:4002", "dc", 1, 0.2, 1.0)
+AptControllerConfig("APT-KIM101", "plsparcrasb005.lnf.infn.it:4001", "kim", 4, 0.2, 1.0)

@@ -213,6 +213,9 @@ public:
     void pzMotMoveJog(int direction);
     int  pzMotRequestStatus(AptPzMotStatusUpdate* status);
 
+    int pzMotGetDriveParams(AptPzMotDriveOpParams* params);
+    int pzMotSetDriveParams(double maxVelocity, double acceleration);
+
 private:
     uint16_t chanBitmask_;    /* channel bitmask (1, 2, 4, 8) */
     uint16_t chanEnableMode_; /* PZMOT channel enable value (1-4) */

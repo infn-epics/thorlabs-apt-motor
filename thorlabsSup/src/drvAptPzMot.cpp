@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <cmath>
 
 #define epicsExportSharedSymbols
 
@@ -243,18 +244,255 @@ int AptPzMotAxis::pzMotRequestStatus(AptPzMotStatusUpdate* status)
     return -2;
 }
 
+int AptPzMotAxis::pzMotGetDriveParams(
+    AptPzMotDriveOpParams* params)
+{
+    if (!pC_->aptSerial_ || !params)
+        return -1;
+
+    pC_->aptLock_.lock();
+
+    /*
+     * For PZMOT_REQ_PARAMS:
+     * param1 = sub-message ID
+     * param2 = channel bitmask
+     */
+    int ret = aptSendShortMessage(
+        pC_->aptSerial_,
+        MGMSG_PZMOT_REQ_PARAMS,
+        (uint8_t)PZMOT_SUBMSG_DRIVEOPPARAMS,
+        (uint8_t)chanBitmask_,
+        pC_->dest_,
+        APT_HOST);
+
+    if (ret != 0) {
+        pC_->aptLock_.unlock();
+        APT_ERR("PZMOT: failed to request DriveOP params "
+                "for axis %d, ret=%d\n",
+                axisNo_, ret);
+        return ret;
+    }
+
+    uint8_t header[6];
+    uint8_t data[256];
+    uint16_t dataLen = 0;
+
+    for (int attempt = 0; attempt < 20; attempt++) {
+        ret = aptReceiveMessage(
+            pC_->aptSerial_,
+            header,
+            data,
+            sizeof(data),
+            &dataLen,
+            2000);
+
+        if (ret != 0) {
+            pC_->aptLock_.unlock();
+            APT_ERR("PZMOT: timeout/error reading DriveOP params "
+                    "for axis %d, ret=%d\n",
+                    axisNo_, ret);
+            return ret;
+        }
+
+        uint16_t msgId = aptGetMsgId(header);
+
+        if (msgId == MGMSG_PZMOT_GET_PARAMS &&
+            dataLen >= sizeof(AptPzMotDriveOpParams)) {
+
+            AptPzMotDriveOpParams received;
+            memcpy(&received, data, sizeof(received));
+
+            /*
+             * Ignore a GET_PARAMS response belonging to another
+             * sub-message or another channel.
+             */
+            if (received.subMsgId !=
+                    PZMOT_SUBMSG_DRIVEOPPARAMS ||
+                received.chanIdent != chanBitmask_) {
+                continue;
+            }
+
+            *params = received;
+            pC_->aptLock_.unlock();
+
+            APT_INFO(
+                "PZMOT DriveOP read: axis=%d chan=0x%X "
+                "voltage=%u rate=%u accel=%u\n",
+                axisNo_,
+                received.chanIdent,
+                received.maxVoltage,
+                received.stepRate,
+                received.stepAcceleration);
+
+            return 0;
+        }
+
+        /*
+         * These messages can already be present in the receive
+         * buffer. They do not belong to this request.
+         */
+        if (msgId == MGMSG_PZMOT_GET_STATUSUPDATE ||
+            msgId == MGMSG_PZMOT_MOVE_COMPLETED ||
+            msgId == MGMSG_MOT_MOVE_COMPLETED ||
+            msgId == MGMSG_MOT_MOVE_STOPPED) {
+            continue;
+        }
+
+        if (msgId == MGMSG_HW_RESPONSE ||
+            msgId == MGMSG_HW_RICHRESPONSE) {
+            pC_->aptLock_.unlock();
+            APT_ERR("PZMOT: controller rejected DriveOP request "
+                    "for axis %d\n",
+                    axisNo_);
+            return -3;
+        }
+    }
+
+    pC_->aptLock_.unlock();
+
+    APT_ERR("PZMOT: no matching DriveOP response "
+            "for axis %d\n",
+            axisNo_);
+
+    return -2;
+}
+
+int AptPzMotAxis::pzMotSetDriveParams(
+    double maxVelocity,
+    double acceleration)
+{
+    if (!pC_->aptSerial_)
+        return -1;
+
+    if (!std::isfinite(maxVelocity) ||
+        !std::isfinite(acceleration)) {
+        APT_ERR("PZMOT: non-finite velocity/acceleration "
+                "for axis %d\n",
+                axisNo_);
+        return -1;
+    }
+
+    uint32_t stepRate =
+        (uint32_t)std::llround(std::fabs(maxVelocity));
+
+    uint32_t stepAcceleration =
+        (uint32_t)std::llround(std::fabs(acceleration));
+
+    /*
+     * KIM101 limits documented by Thorlabs.
+     * Reject invalid values instead of silently changing them.
+     */
+    if (stepRate < 1 || stepRate > 2000) {
+        APT_ERR("PZMOT: requested velocity %u is outside "
+                "the valid range 1..2000 steps/s\n",
+                stepRate);
+        return -1;
+    }
+
+    if (stepAcceleration < 1 ||
+        stepAcceleration > 100000) {
+        APT_ERR("PZMOT: requested acceleration %u is outside "
+                "the valid range 1..100000 steps/s^2\n",
+                stepAcceleration);
+        return -1;
+    }
+
+    /*
+     * Read the current structure so that the existing piezo
+     * voltage is preserved.
+     */
+    AptPzMotDriveOpParams params;
+
+    int ret = pzMotGetDriveParams(&params);
+    if (ret != 0)
+        return ret;
+
+    /*
+     * Refuse to overwrite a suspicious voltage value.
+     * Do not invent a default voltage.
+     */
+    if (params.maxVoltage < 85 ||
+        params.maxVoltage > 125) {
+        APT_ERR("PZMOT: controller returned invalid/suspicious "
+                "maxVoltage=%u for axis %d; profile not changed\n",
+                params.maxVoltage, axisNo_);
+        return -1;
+    }
+
+    params.subMsgId =
+        PZMOT_SUBMSG_DRIVEOPPARAMS;
+    params.chanIdent = chanBitmask_;
+    params.stepRate = stepRate;
+    params.stepAcceleration = stepAcceleration;
+
+    pC_->aptLock_.lock();
+
+    ret = aptSendLongMessage(
+        pC_->aptSerial_,
+        MGMSG_PZMOT_SET_PARAMS,
+        &params,
+        sizeof(params),
+        pC_->dest_,
+        APT_HOST);
+
+    pC_->aptLock_.unlock();
+
+    if (ret != 0) {
+        APT_ERR("PZMOT: failed to set DriveOP params "
+                "for axis %d, ret=%d\n",
+                axisNo_, ret);
+        return ret;
+    }
+
+    /*
+     * Read back and verify. A successful socket write alone does
+     * not prove that the controller accepted the parameters.
+     */
+    AptPzMotDriveOpParams verify;
+
+    ret = pzMotGetDriveParams(&verify);
+    if (ret != 0)
+        return ret;
+
+    if (verify.maxVoltage != params.maxVoltage ||
+        verify.stepRate != params.stepRate ||
+        verify.stepAcceleration !=
+            params.stepAcceleration) {
+
+        APT_ERR(
+            "PZMOT: DriveOP verification failed for axis %d: "
+            "requested V=%u rate=%u accel=%u, "
+            "read V=%u rate=%u accel=%u\n",
+            axisNo_,
+            params.maxVoltage,
+            params.stepRate,
+            params.stepAcceleration,
+            verify.maxVoltage,
+            verify.stepRate,
+            verify.stepAcceleration);
+
+        return -1;
+    }
+
+    APT_INFO(
+        "PZMOT DriveOP set: axis=%d voltage=%u "
+        "rate=%u accel=%u\n",
+        axisNo_,
+        params.maxVoltage,
+        params.stepRate,
+        params.stepAcceleration);
+
+    return 0;
+}
+
 /* ---- asynMotorAxis interface ---- */
 
 asynStatus AptPzMotAxis::move(double position, int relative,
                                double minVelocity, double maxVelocity,
                                double acceleration)
 {
-    APT_INFO("PZMOT move: pos=%.4f rel=%d\n", position, relative);
+    APT_INFO("PZMOT move: pos=%.4f rel=%d minVel=%.4f maxVel=%.4f accel=%.4f \n", position, relative, minVelocity, maxVelocity, acceleration);
 
-    /* Signal move started immediately */
-    setIntegerParam(pC_->motorStatusDone_, 0);
-    setIntegerParam(pC_->motorStatusMoving_, 1);
-    callParamCallbacks();
 
     /* Flush stale messages */
     if (pC_->aptSerial_) {
@@ -269,6 +507,23 @@ asynStatus AptPzMotAxis::move(double position, int relative,
      * Without this, only the channel selected on the front panel moves.
      */
     this->pzMotEnableChannel();
+
+    /*
+     * Program this move's requested EPICS velocity and
+     * acceleration while preserving maxVoltage.
+     */
+    if (this->pzMotSetDriveParams(
+            maxVelocity, acceleration) != 0) {
+        APT_ERR("PZMOT move: could not configure velocity "
+                "profile for axis %d; move cancelled\n",
+                axisNo_);
+        return asynError;
+    }
+
+    /* Mark moving only after successful profile configuration */
+    setIntegerParam(pC_->motorStatusDone_, 0);
+    setIntegerParam(pC_->motorStatusMoving_, 1);
+    callParamCallbacks();
 
     if (relative) {
         /* For relative moves, read current position and compute absolute */

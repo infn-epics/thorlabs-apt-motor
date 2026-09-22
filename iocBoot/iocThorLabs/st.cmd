@@ -22,7 +22,7 @@ dbLoadRecords("$(MOTOR)/db/motorUtil.db", "P=Motor:")
 ##   Local USB:  AptDC.cmd          (device at /dev/ttyUSBx)
 ##   ser2net:    AptDC_ser2net.cmd  (device at host:port)
 #< AptDC.cmd
-#< AptDC_ser2net.cmd
+< AptDC_ser2net.cmd
 
 ## Stepper motor (KST101, TST001, BSC10x, etc.)
 ##   Local USB:  AptStepper.cmd          (device at /dev/ttyUSBx)
@@ -32,7 +32,7 @@ dbLoadRecords("$(MOTOR)/db/motorUtil.db", "P=Motor:")
 
 ## Piezo inertial motor (KIM101) or direct-drive piezo (KPZ101, TPZ001, etc.)
 ##   ser2net:    AptKPZ101_ser2net.cmd  (KIM101 4-ch at host:port)
-< AptKPZ101_ser2net.cmd
+#< AptKPZ101_ser2net.cmd
 
 ## ============================================================================
 

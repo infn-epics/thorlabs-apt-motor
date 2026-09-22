@@ -187,6 +187,7 @@
 #define PZMOT_SUBMSG_AMPOUTPARAMS      0x0045  /* amplitude output params */
 #define PZMOT_SUBMSG_OPENMOVEPARAMS    0x0046  /* open-loop move params */
 #define PZMOT_SUBMSG_CLOSEMOVEPARAMS   0x0047  /* close-loop move params */
+#define PZMOT_SUBMSG_DRIVEOPPARAMS     0x0007  /* speed and acceleration params */
 
 /*
  * PZMOT KCube channel enable modes (sub-message 0x2B).
@@ -479,6 +480,23 @@ struct AptPzMotSetPos {
     uint32_t reserved;     /* set to 0 */
     int32_t  position;     /* new position value (0 to zero) */
 };
+
+/*
+ * KIM101/TIM101 DriveOPParameters, sub-message 0x0007.
+ *
+ * Controls the velocity and acceleration used by normal absolute
+ * and relative moves. chanIdent is a bitmask:
+ * channel 1=1, channel 2=2, channel 3=4, channel 4=8.
+ */
+struct AptPzMotDriveOpParams {
+    uint16_t subMsgId;
+    uint16_t chanIdent;
+    uint16_t maxVoltage;
+    uint32_t stepRate;
+    uint32_t stepAcceleration;
+};
+static_assert(sizeof(AptPzMotDriveOpParams) == 14,
+              "AptPzMotDriveOpParams must be 14 bytes");
 
 #pragma pack(pop)
 
