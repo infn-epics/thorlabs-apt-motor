@@ -305,10 +305,14 @@ int AptPzMotAxis::pzMotGetDriveParams(
             /*
              * Ignore a GET_PARAMS response belonging to another
              * sub-message or another channel.
+             * The spec uses bitmask encoding (1,2,4,8), but some
+             * firmware versions answer with the channel number (1-4),
+             * as already handled in poll(). Accept both.
              */
             if (received.subMsgId !=
                     PZMOT_SUBMSG_DRIVEOPPARAMS ||
-                received.chanIdent != chanBitmask_) {
+                (received.chanIdent != chanBitmask_ &&
+                 received.chanIdent != (uint16_t)(axisNo_ + 1))) {
                 continue;
             }
 
@@ -511,16 +515,17 @@ asynStatus AptPzMotAxis::move(double position, int relative,
     /*
      * Program this move's requested EPICS velocity and
      * acceleration while preserving maxVoltage.
+     * A failure here must not block the move: the controller
+     * keeps its previous drive parameters, so warn and go on.
      */
     if (this->pzMotSetDriveParams(
             maxVelocity, acceleration) != 0) {
-        APT_ERR("PZMOT move: could not configure velocity "
-                "profile for axis %d; move cancelled\n",
-                axisNo_);
-        return asynError;
+        fprintf(stderr, "drvApt: PZMOT move: could not configure "
+                "velocity profile for axis %d (vel=%.1f accel=%.1f); "
+                "moving with controller's current drive parameters\n",
+                axisNo_, maxVelocity, acceleration);
     }
 
-    /* Mark moving only after successful profile configuration */
     setIntegerParam(pC_->motorStatusDone_, 0);
     setIntegerParam(pC_->motorStatusMoving_, 1);
     callParamCallbacks();
